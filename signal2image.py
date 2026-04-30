@@ -28,11 +28,24 @@ _range_to_ignore = 20
 _split_percentage = .70
 size = 64
 
-# Annotation symbol to class label mapping
-labels_json = '{ ".": "NOR", "N": "NOR", "V": "PVC", "/": "PAB", "L": "LBB", "R": "RBB", "A": "APC", "!": "VFW", "E": "VEB" }'
-labels_to_float = '{ "NOR": "0", "PVC" : "1", "PAB": "2", "LBB": "3", "RBB": "4", "APC": "5", "VFW": "6", "VEB": "7" }'
+# ── CHANGE (Option C) ────────────────────────────────────────────────────────
+# VFW ("!") and VEB ("E") each had only ~14 samples in the full dataset,
+# which is far too few for any classifier to learn a decision boundary.
+# Keeping them as separate classes produced 0% precision/recall on both and
+# their extremely high loss-weights injected noisy gradients that damaged
+# training on all other classes.
+#
+# Instead of dropping them (Option B), we merge both into a single "OTH"
+# (Other/Unknown) class (integer label 6).  This:
+#   1. Preserves the clinical signal — the model can still flag unusual beats.
+#   2. Pools ~28 samples together, giving the model marginally more signal.
+#   3. Removes the two poisonous near-zero-count class weights from the loss.
+#   4. Reduces the problem from 8 classes to 7 classes.
+# ─────────────────────────────────────────────────────────────────────────────
+labels_json     = '{ ".": "NOR", "N": "NOR", "V": "PVC", "/": "PAB", "L": "LBB", "R": "RBB", "A": "APC", "!": "OTH", "E": "OTH" }'
+labels_to_float = '{ "NOR": "0", "PVC": "1", "PAB": "2", "LBB": "3", "RBB": "4", "APC": "5", "OTH": "6" }'
 original_labels = json.loads(labels_json)
-labels = json.loads(labels_to_float)
+labels          = json.loads(labels_to_float)
 
 
 def parse_annotations(ann_file):
@@ -121,7 +134,7 @@ def create_images_from_csv(data_dir, output_dir, img_size=(64, 64)):
     random.shuffle(csv_files)
     split_point = int(len(csv_files) * _split_percentage)
     train_files = set(csv_files[:split_point])
-    val_files = set(csv_files[split_point:])
+    val_files   = set(csv_files[split_point:])
     
     print(f"Train files: {len(train_files)}, Validation files: {len(val_files)}")
     
@@ -166,11 +179,11 @@ def create_images_from_csv(data_dir, output_dir, img_size=(64, 64)):
             if symbol not in original_labels:
                 continue
             
-            label = original_labels[symbol]
+            label = original_labels[symbol]   # e.g. "NOR", "PVC", ... or "OTH"
             
             # Get beat boundaries
             start = ann_samples[i - 1] + _range_to_ignore
-            end = ann_samples[i + 1] - _range_to_ignore
+            end   = ann_samples[i + 1] - _range_to_ignore
             
             if start >= end or start < 0 or end > len(signal):
                 continue
@@ -224,12 +237,13 @@ def create_images_from_csv(data_dir, output_dir, img_size=(64, 64)):
 if __name__ == '__main__':
     args = parser.parse_args()
     
-    data_dir = args.data_path if args.data_path.endswith('/') else args.data_path + '/'
+    data_dir   = args.data_path   if args.data_path.endswith('/')   else args.data_path   + '/'
     output_dir = args.output_path if args.output_path.endswith('/') else args.output_path + '/'
     
     print("Starting signal to image conversion...")
     print(f"Reading from: {data_dir}")
-    print(f"Saving to: {output_dir}")
+    print(f"Saving to:   {output_dir}")
+    print(f"Classes:     {list(set(original_labels.values()))}")
     
     start = time.time()
     create_images_from_csv(data_dir, output_dir)

@@ -23,8 +23,20 @@ graph_indicator = []
 node_labels     = []
 graph_labels    = []
 
-activity_map = {0:'NOR', 1:'PVC', 2:'PAB', 3:'LBB', 4:'RBB', 5:'APC', 6:'VFW', 7:'VEB'}
+# ── CHANGE (Option C) ────────────────────────────────────────────────────────
+# Reduced from 8 classes to 7. VFW (6) and VEB (7) are replaced by OTH (6).
+# The integer label 6 now means "Other/Unknown beat" — a merged class that
+# pools the former VFW and VEB samples. The old integer labels 6 and 7 no
+# longer exist; only 0–6 are valid.
+# ─────────────────────────────────────────────────────────────────────────────
+activity_map   = {0: 'NOR', 1: 'PVC', 2: 'PAB', 3: 'LBB', 4: 'RBB', 5: 'APC', 6: 'OTH'}
 class_to_label = {v: k for k, v in activity_map.items()}
+
+# ── CHANGE (Option C) ────────────────────────────────────────────────────────
+# ECG_CLASSES now lists 7 folder names. The edge_transformation step will have
+# produced an "OTH" subfolder (containing the former VFW + VEB images).
+# ─────────────────────────────────────────────────────────────────────────────
+ECG_CLASSES_DEFAULT = ['NOR', 'PVC', 'PAB', 'LBB', 'RBB', 'APC', 'OTH']
 
 
 def normalize(arr):
@@ -43,8 +55,8 @@ def generate_graphs(filename, node_label):
         return
     dim1, dim2, _ = img.shape
     attrs1 = []
-    nodes = np.full((dim1, dim2), -1)
-    edge = 0
+    nodes  = np.full((dim1, dim2), -1)
+    edge   = 0
 
     for i in range(dim1):
         for j in range(dim2):
@@ -60,9 +72,9 @@ def generate_graphs(filename, node_label):
     for i in range(dim1):
         for j in range(dim2):
             if nodes[i][j] != -1:
-                for i1 in range(max(0,i-1), min(i+2,dim1)):
-                    for j1 in range(max(0,j-1), min(j+2,dim2)):
-                        if (i1!=i or j1!=j) and nodes[i1][j1]!=-1:
+                for i1 in range(max(0, i-1), min(i+2, dim1)):
+                    for j1 in range(max(0, j-1), min(j+2, dim2)):
+                        if (i1 != i or j1 != j) and nodes[i1][j1] != -1:
                             edges.append([nodes[i][j], nodes[i1][j1]])
                             edge += 1
 
@@ -101,10 +113,10 @@ def build_graph_dataset(edge_base, output_base, dataset_name, classes):
         print("ERROR: No graphs generated!")
         return
 
-    df_A = pd.DataFrame(data=np.array(edges), columns=["node-1","node-2"])
-    df_nl = pd.DataFrame(data=np.array(node_labels), columns=["label","name"]).drop("name", axis=1)
-    df_gl = pd.DataFrame(data=np.array(graph_labels), columns=["label","name"]).drop("name", axis=1)
-    df_na = pd.DataFrame(data=np.array(attrs), columns=["gray-val"])
+    df_A  = pd.DataFrame(data=np.array(edges),       columns=["node-1", "node-2"])
+    df_nl = pd.DataFrame(data=np.array(node_labels),  columns=["label", "name"]).drop("name", axis=1)
+    df_gl = pd.DataFrame(data=np.array(graph_labels), columns=["label", "name"]).drop("name", axis=1)
+    df_na = pd.DataFrame(data=np.array(attrs),        columns=["gray-val"])
     df_gi = pd.DataFrame(data=np.array(graph_indicator), columns=["graph-id"])
 
     sourcepath = os.path.join(output_base, dataset_name, 'raw')
@@ -119,9 +131,8 @@ def build_graph_dataset(edge_base, output_base, dataset_name, classes):
 
 
 if __name__ == '__main__':
-    args = parser.parse_args()
+    args  = parser.parse_args()
     start = time.time()
-    ECG_CLASSES = ['NOR','PVC','PAB','LBB','RBB','APC','VFW','VEB']
-    build_graph_dataset(args.edge_base, args.output_base, args.dataset_name, ECG_CLASSES)
-    end = time.time()
+    build_graph_dataset(args.edge_base, args.output_base, args.dataset_name, ECG_CLASSES_DEFAULT)
+    end   = time.time()
     print(f"Total time (min): {(end-start)/60:.2f}")
